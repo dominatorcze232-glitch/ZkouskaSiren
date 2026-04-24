@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Chat</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 10px; }
+        #chat-box { border: 1px solid #ccc; height: 400px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
+        .message { margin-bottom: 8px; padding: 5px; border-bottom: 1px solid #eee; }
+        .nickname { font-weight: bold; color: #2c3e50; }
+        #message-form { display: flex; gap: 5px; }
+        input[type="text"] { flex-grow: 1; padding: 8px; }
+        button { padding: 8px 15px; cursor: pointer; background: #27ae60; color: white; border: none; }
+        button:disabled { background: #ccc; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <h2>Chatovací místnost</h2>
+    <div id="chat-box">Načítám zprávy...</div>
+
+    <!-- Formulář pro psaní zpráv -->
+    <div id="input-container">
+        <form id="message-form">
+            <input type="text" id="msg-input" placeholder="Napište zprávu (max 1000 znaků)..." maxlength="1000" required>
+            <button type="submit" id="send-btn">Odeslat</button>
+        </form>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // Tvoje konfigurace
+        const firebaseConfig = {
+            apiKey: "AIzaSyAB-g5RMWD2gGquAqyOFBslUegRUG_15eE",
+            authDomain: "appka-fb08e.firebaseapp.com",
+            databaseURL: "https://appka-fb08e-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "appka-fb08e",
+            storageBucket: "appka-fb08e.firebasestorage.app",
+            messagingSenderId: "1093616123944",
+            appId: "1:1093616123944:web:3fb16b2d1c3c3d4c14b51d"
+        };
+
+        // Inicializace Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const messagesRef = ref(db, 'messages');
+
+        // Dotaz na přezdívku
+        let nickname = prompt("Jakou chcete mít přezdívku?");
+        if (!nickname || nickname.trim() === "") nickname = "Anonym";
+
+        const inputContainer = document.getElementById('input-container');
+        const chatBox = document.getElementById('chat-box');
+        const messageForm = document.getElementById('message-form');
+        const msgInput = document.getElementById('msg-input');
+
+        // Speciální pravidlo pro Sominika
+        if (nickname === "Sominik") {
+            inputContainer.classList.add('hidden');
+        }
+
+        // Odesílání zpráv
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = msgInput.value.trim();
+            
+            if (text && text.length <= 1000) {
+                push(messagesRef, {
+                    username: nickname,
+                    message: text,
+                    timestamp: serverTimestamp()
+                });
+                msgInput.value = ""; // Vymazat pole po odeslání
+            }
+        });
+
+        // Načítání zpráv v reálném čase
+        chatBox.innerHTML = ""; // Vyčistit "Načítám..."
+        onChildAdded(messagesRef, (data) => {
+            const val = data.val();
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message';
+            msgDiv.innerHTML = `<span class="nickname">${val.username}</span> napsal/a: <span>${val.message}</span>`;
+            chatBox.appendChild(msgDiv);
+            
+            // Automatické scrollování dolů
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+    </script>
+</body>
+</html>
