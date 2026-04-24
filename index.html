@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dark Firebase Chat</title>
+    <title>Private Chat for Sominik</title>
     <style>
-        /* Dark Mode Styly */
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Segoe UI', sans-serif; 
             max-width: 800px; 
             margin: 0 auto; 
             padding: 20px; 
@@ -17,6 +16,7 @@
         
         h2 { color: #bb86fc; text-align: center; }
 
+        /* Chat box uvidí jen Sominik */
         #chat-box { 
             border: 1px solid #333; 
             height: 500px; 
@@ -25,28 +25,22 @@
             margin-bottom: 20px; 
             background: #1e1e1e; 
             border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: none; /* Výchozí stav: skryto */
         }
 
         .message { 
             margin-bottom: 12px; 
             padding: 10px; 
             border-bottom: 1px solid #333; 
-            line-break: anywhere;
         }
 
-        .nickname { 
-            font-weight: bold; 
-            color: #03dac6; 
-            margin-right: 8px;
-        }
-
-        .text { color: #cfcfcf; }
+        .nickname { color: #03dac6; font-weight: bold; }
 
         #input-container { 
             background: #1e1e1e;
-            padding: 15px;
+            padding: 20px;
             border-radius: 8px;
+            text-align: center;
         }
 
         #message-form { display: flex; gap: 10px; }
@@ -58,45 +52,37 @@
             border: 1px solid #444; 
             color: white; 
             border-radius: 4px;
-            outline: none;
         }
-
-        input[type="text"]:focus { border-color: #bb86fc; }
 
         button { 
             padding: 10px 20px; 
-            cursor: pointer; 
             background: #bb86fc; 
             color: #000; 
             border: none; 
             font-weight: bold; 
             border-radius: 4px;
-            transition: background 0.3s;
+            cursor: pointer;
         }
 
-        button:hover { background: #9965f4; }
-
         .hidden { display: none !important; }
-
-        /* Scrollbar design */
-        #chat-box::-webkit-scrollbar { width: 8px; }
-        #chat-box::-webkit-scrollbar-track { background: #121212; }
-        #chat-box::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        
+        .status-msg { color: #888; font-style: italic; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <h2>Aplikace Chat</h2>
+    <h2 id="title">Poslat zprávu</h2>
     
-    <!-- Všichni vidí chat-box -->
-    <div id="chat-box">Načítám historii zpráv...</div>
+    <!-- Tento box se zobrazí POUZE Sominikovi -->
+    <div id="chat-box"></div>
 
-    <!-- Jen pro lidi co nejsou Sominik -->
+    <!-- Toto uvidí všichni kromě Sominika -->
     <div id="input-container">
         <form id="message-form">
-            <input type="text" id="msg-input" placeholder="Napište zprávu..." maxlength="1000" required>
-            <button type="submit" id="send-btn">Odeslat</button>
+            <input type="text" id="msg-input" placeholder="Napište zprávu Sominikovi..." maxlength="1000" required>
+            <button type="submit">Odeslat</button>
         </form>
+        <p class="status-msg">Vaše zprávy uvidí pouze Sominik.</p>
     </div>
 
     <script type="module">
@@ -117,44 +103,47 @@
         const db = getDatabase(app);
         const messagesRef = ref(db, 'messages');
 
-        // Výzva k zadání přezdívky
         let nickname = prompt("Jakou chcete mít přezdívku?");
         if (!nickname || nickname.trim() === "") nickname = "Anonym";
 
-        const inputContainer = document.getElementById('input-container');
         const chatBox = document.getElementById('chat-box');
+        const inputContainer = document.getElementById('input-container');
         const messageForm = document.getElementById('message-form');
         const msgInput = document.getElementById('msg-input');
+        const title = document.getElementById('title');
 
-        // PRAVIDLO: Sominik nevidí formulář pro psaní, ale zprávy vidí
+        // LOGIKA ZOBRAZENÍ
         if (nickname === "Sominik") {
+            // Sominik vidí zprávy, ale nemůže psát
+            chatBox.style.display = "block";
             inputContainer.classList.add('hidden');
+            title.innerText = "Přijaté zprávy (Admin)";
+            
+            // Načítání zpráv pouze pro Sominika
+            onChildAdded(messagesRef, (data) => {
+                const val = data.val();
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'message';
+                msgDiv.innerHTML = `<span class="nickname">${val.username}</span> napsal/a: <span>${val.message}</span>`;
+                chatBox.appendChild(msgDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        } else {
+            // Ostatní posílají zprávy, ale nevidí chatBox
+            messageForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const text = msgInput.value.trim();
+                if (text) {
+                    push(messagesRef, {
+                        username: nickname,
+                        message: text,
+                        timestamp: serverTimestamp()
+                    });
+                    msgInput.value = "";
+                    alert("Zpráva byla odeslána Sominikovi.");
+                }
+            });
         }
-
-        // Posílání zpráv
-        messageForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const text = msgInput.value.trim();
-            if (text) {
-                push(messagesRef, {
-                    username: nickname,
-                    message: text,
-                    timestamp: serverTimestamp()
-                });
-                msgInput.value = "";
-            }
-        });
-
-        // Přidávání zpráv do okna (vidí všichni)
-        chatBox.innerHTML = ""; 
-        onChildAdded(messagesRef, (data) => {
-            const val = data.val();
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message';
-            msgDiv.innerHTML = `<span class="nickname">${val.username}</span> <span class="text">napsal/a: ${val.message}</span>`;
-            chatBox.appendChild(msgDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        });
     </script>
 </body>
 </html>
