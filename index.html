@@ -19,29 +19,30 @@
         .btn { width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-main { background: var(--primary); color: #000; }
         .btn-sub { background: transparent; color: var(--secondary); border: 1px solid var(--secondary); margin-top: 20px; }
-        .btn-admin { position: absolute; top: 10px; right: 10px; padding: 5px 10px; font-size: 12px; background: #333; color: #fff; border-radius: 4px; }
+        .btn-admin { position: absolute; top: 10px; right: 10px; padding: 5px 10px; font-size: 12px; background: #333; color: #fff; border-radius: 4px; border: none; cursor: pointer; }
         
         #user-list { list-style: none; padding: 0; }
-        #user-list li { background: #2c2c2c; margin: 5px 0; padding: 10px; border-radius: 5px; cursor: pointer; text-align: center; border: 1px solid transparent; }
-        #user-list li:hover { border-color: var(--primary); }
+        #user-list li { background: #2c2c2c; margin: 10px 0; padding: 15px; border-radius: 8px; cursor: pointer; text-align: center; border: 1px solid #444; transition: 0.2s; }
+        #user-list li:hover { border-color: var(--primary); background: #333; }
 
         #chat-section, #register-section { display: none; position: relative; }
-        #message-list { height: 300px; overflow-y: auto; border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: #151515; }
-        .message { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; }
-        .del-btn { color: var(--error); cursor: pointer; font-size: 12px; }
+        #message-list { height: 350px; overflow-y: auto; border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: #151515; border-radius: 4px; }
+        .message { padding: 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; word-break: break-word; }
+        .del-btn { background: var(--error); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 10px; }
 
-        input { width: 100%; padding: 10px; margin: 8px 0; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
-        .hidden { display: none; }
+        input { width: 100%; padding: 12px; margin: 8px 0; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; outline: none; }
+        input:focus { border-color: var(--primary); }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div class="container" id="main-app" style="display: none;">
     <!-- HLAVNÍ NABÍDKA -->
     <div id="menu-section">
-        <h2>Komu chcete napsat?</h2>
+        <h2 id="welcome-msg">Komu chcete napsat?</h2>
         <ul id="user-list">
-            <li onclick="openChat('Dominik', '6852')">Napsat Dominikovi</li>
+            <!-- Tady se generují tlačítka -->
         </ul>
         <button class="btn btn-sub" onclick="showRegister()">Chcete aby vám taky psali? Klikněte zde!</button>
     </div>
@@ -49,7 +50,7 @@
     <!-- CHAT SEKCE -->
     <div id="chat-section">
         <button id="admin-login-btn" class="btn-admin">Přihlásit se na tento účet?</button>
-        <h2 id="chat-title">Chat</h2>
+        <h2 id="chat-title">Napsat zprávu</h2>
         <div id="message-list" class="hidden"></div>
         <form id="msg-form">
             <input type="text" id="msg-input" placeholder="Zadejte text (max 1000 znaků)..." maxlength="1000" required>
@@ -58,7 +59,7 @@
         <button class="btn btn-sub" onclick="location.reload()">Zpět do menu</button>
     </div>
 
-    <!-- REGISTRACE NOVÉHO JMÉNA -->
+    <!-- REGISTRACE -->
     <div id="register-section">
         <h2>Nová registrace</h2>
         <input type="text" id="reg-name" placeholder="Jakou chcete mít přezdívku?">
@@ -84,23 +85,98 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    let currentTarget = "";
-    let correctPass = "";
+    
+    // --- DOTAZ NA PŘEZDÍVKU HNED NA ZAČÁTKU ---
+    let myNickname = prompt("Jakou chcete mít přezdívku?");
+    if(!myNickname || myNickname.trim() === "") myNickname = "Anonym";
+    
+    document.getElementById('main-app').style.display = 'block';
+    document.getElementById('welcome-msg').innerText = `Ahoj ${myNickname}, komu napíšeme?`;
 
-    // --- NAČÍTÁNÍ UŽIVATELŮ ---
+    let currentTarget = "";
+    let targetPassword = "";
+
+    // --- NAČÍTÁNÍ SEZNAMU UŽIVATELŮ ---
+    const userListUI = document.getElementById('user-list');
     onValue(ref(db, 'users'), (snapshot) => {
-        const userList = document.getElementById('user-list');
-        userList.innerHTML = '<li onclick="openChat(\'Dominik\', \'6852\')">Napsat Dominikovi</li>';
+        userListUI.innerHTML = "";
+        
+        // Vždy přidat Dominika jako první
+        addListItem("Dominik", "6852");
+
+        // Přidat ostatní z databáze
         snapshot.forEach((child) => {
-            const data = child.val();
-            const li = document.createElement('li');
-            li.innerText = `Napsat ${data.name}`;
-            li.onclick = () => openChat(data.name, data.password);
-            userList.appendChild(li);
+            const u = child.val();
+            if(u.name !== "Dominik") {
+                addListItem(u.name, u.password);
+            }
         });
     });
 
-    // --- FUNKCE ---
+    function addListItem(name, pass) {
+        const li = document.createElement('li');
+        li.innerText = `Napsat ${name}`;
+        li.onclick = () => openChat(name, pass);
+        userListUI.appendChild(li);
+    }
+
+    // --- LOGIKA CHATU ---
+    window.openChat = (name, pass) => {
+        currentTarget = name;
+        targetPassword = pass;
+        document.getElementById('menu-section').style.display = 'none';
+        document.getElementById('chat-section').style.display = 'block';
+        document.getElementById('chat-title').innerText = `Píšete uživateli: ${name}`;
+        
+        const loginBtn = document.getElementById('admin-login-btn');
+        loginBtn.innerText = (name === "Dominik") ? "Přihlásit se jako Dominik" : "Přihlásit se na tento účet?";
+        
+        loginBtn.onclick = () => {
+            const passEntry = prompt("Zadejte heslo k tomuto účtu:");
+            if(passEntry === targetPassword) {
+                document.getElementById('message-list').classList.remove('hidden');
+                loadMessages(name);
+            } else {
+                alert("Špatné heslo!");
+            }
+        };
+    };
+
+    function loadMessages(userName) {
+        const list = document.getElementById('message-list');
+        list.innerHTML = "";
+        onChildAdded(ref(db, 'messages/' + userName), (data) => {
+            const m = data.val();
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.innerHTML = `<span>${m.text}</span> <button class="del-btn" onclick="window.deleteMsg('${userName}', '${data.key}')">Smazat</button>`;
+            list.appendChild(div);
+            list.scrollTop = list.scrollHeight;
+        });
+    }
+
+    window.deleteMsg = (user, key) => {
+        if(confirm("Smazat zprávu?")) {
+            remove(ref(db, `messages/${user}/${key}`));
+            location.reload(); 
+        }
+    };
+
+    document.getElementById('msg-form').onsubmit = (e) => {
+        e.preventDefault();
+        const input = document.getElementById('msg-input');
+        if(input.value.trim()) {
+            push(ref(db, 'messages/' + currentTarget), {
+                text: input.value,
+                sender: myNickname, // Uloží se, ale nikdo (ani Dominik) to neuvidí, protože to nevypisujeme
+                time: Date.now()
+            });
+            input.value = "";
+            alert("Odesláno!");
+        }
+    };
+
+    // --- REGISTRACE ---
     window.showRegister = () => {
         document.getElementById('menu-section').style.display = 'none';
         document.getElementById('register-section').style.display = 'block';
@@ -111,58 +187,8 @@
         const pass = document.getElementById('reg-pass').value.trim();
         if(name && pass) {
             set(ref(db, 'users/' + name), { name: name, password: pass });
-            alert("Účet vytvořen!");
+            alert("Hotovo! Nyní jsi v seznamu.");
             location.reload();
-        }
-    };
-
-    window.openChat = (targetName, pass) => {
-        currentTarget = targetName;
-        correctPass = pass;
-        document.getElementById('menu-section').style.display = 'none';
-        document.getElementById('chat-section').style.display = 'block';
-        document.getElementById('chat-title').innerText = "Píšete: " + targetName;
-        document.getElementById('admin-login-btn').innerText = (targetName === "Dominik") ? "Přihlásit se jako Dominik" : "Přihlásit se na tento účet?";
-        
-        document.getElementById('admin-login-btn').onclick = () => {
-            const entered = prompt("Zadejte heslo:");
-            if(entered === correctPass) {
-                document.getElementById('message-list').classList.remove('hidden');
-                loadMessages();
-            } else {
-                alert("Špatné heslo!");
-            }
-        };
-    };
-
-    function loadMessages() {
-        const list = document.getElementById('message-list');
-        list.innerHTML = "";
-        onChildAdded(ref(db, 'messages/' + currentTarget), (data) => {
-            const msg = data.val();
-            const div = document.createElement('div');
-            div.className = 'message';
-            div.innerHTML = `<span>${msg.text}</span> <span class="del-btn" onclick="window.delMsg('${data.key}')">✖</span>`;
-            list.appendChild(div);
-            list.scrollTop = list.scrollHeight;
-        });
-    }
-
-    window.delMsg = (key) => {
-        if(confirm("Smazat?")) remove(ref(db, `messages/${currentTarget}/${key}`));
-        location.reload(); // Pro jednoduchost obnovíme
-    };
-
-    document.getElementById('msg-form').onsubmit = (e) => {
-        e.preventDefault();
-        const input = document.getElementById('msg-input');
-        if(input.value.trim()) {
-            push(ref(db, 'messages/' + currentTarget), {
-                text: input.value,
-                time: Date.now()
-            });
-            input.value = "";
-            alert("Zpráva odeslána!");
         }
     };
 </script>
