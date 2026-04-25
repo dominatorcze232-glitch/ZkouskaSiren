@@ -25,13 +25,13 @@
         #user-list { list-style: none; padding: 0; }
         .user-item { display: flex; gap: 5px; align-items: center; margin: 10px 0; }
         .user-link { flex-grow: 1; background: #2c2c2c; padding: 15px; border-radius: 8px; cursor: pointer; text-align: center; border: 1px solid #444; }
-        .user-link:hover { border-color: var(--primary); }
         .btn-del-user { background: var(--error); color: white; border: none; padding: 15px 10px; border-radius: 8px; cursor: pointer; display: none; }
 
         #chat-section, #register-section { display: none; }
         #message-list { height: 350px; overflow-y: auto; border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: #111; border-radius: 4px; }
-        .message { padding: 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-        .del-msg { color: var(--error); cursor: pointer; font-weight: bold; padding: 5px; }
+        .message { padding: 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; word-break: break-all; }
+        .sender-name { color: var(--secondary); font-weight: bold; }
+        .del-msg { color: var(--error); cursor: pointer; font-weight: bold; padding: 5px; margin-left: 10px; }
 
         input { width: 100%; padding: 12px; margin: 8px 0; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
         .hidden { display: none !important; }
@@ -40,7 +40,6 @@
 <body>
 
 <div class="container" id="main-app" style="display: none;">
-    <!-- HLAVNÍ NABÍDKA -->
     <div id="menu-section">
         <button id="master-login" class="btn-admin" onclick="masterLogin()">Přihlásit se (Dominik)</button>
         <h2 id="welcome-msg">Komu napíšeme?</h2>
@@ -48,7 +47,6 @@
         <button class="btn btn-sub" onclick="showRegister()">Chcete aby vám taky psali? Klikněte zde!</button>
     </div>
 
-    <!-- CHAT SEKCE -->
     <div id="chat-section">
         <button id="acc-login-btn" class="btn-admin">Přihlásit se na tento účet?</button>
         <h2 id="chat-title">Napsat zprávu</h2>
@@ -60,7 +58,6 @@
         <button class="btn btn-sub" onclick="location.reload()">Zpět</button>
     </div>
 
-    <!-- REGISTRACE -->
     <div id="register-section">
         <h2>Nová registrace</h2>
         <input type="text" id="reg-name" placeholder="Přezdívka">
@@ -87,35 +84,33 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     
-    let isDominik = false;
+    let isDominikAdmin = false;
     let currentTarget = "";
     let targetPass = "";
 
-    // 1. Dotaz na přezdívku
+    // 1. Prompt na přezdívku
     let userNick = prompt("Jakou chcete mít přezdívku?");
-    if(!userNick) userNick = "Anonym";
+    if(!userNick || userNick.trim() === "") userNick = "Anonym";
+    
     document.getElementById('main-app').style.display = 'block';
     document.getElementById('welcome-msg').innerText = `Ahoj ${userNick}!`;
 
-    // 2. Master login pro Dominika (aby mohl mazat účty v menu)
+    // 2. Dominik Master Login (pro mazání účtů)
     window.masterLogin = () => {
         const p = prompt("Zadejte heslo Dominika:");
         if(p === "6852") {
-            isDominik = true;
-            alert("Jste přihlášen jako Dominik. Můžete mazat účty i zprávy.");
+            isDominikAdmin = true;
+            alert("Mód Dominik aktivován.");
             renderUsers(); 
         } else { alert("Špatné heslo."); }
     };
 
-    // 3. Načítání uživatelů
+    // 3. Vykreslení seznamu
     function renderUsers() {
         onValue(ref(db, 'users'), (snapshot) => {
             const list = document.getElementById('user-list');
             list.innerHTML = "";
-            
-            // Dominik je fixní
             addUserToUI("Dominik", "6852", false);
-
             snapshot.forEach(child => {
                 const u = child.val();
                 if(u.name !== "Dominik") addUserToUI(u.name, u.password, true);
@@ -131,17 +126,17 @@
             <button class="btn-del-user" id="del-u-${name}" onclick="deleteUser('${name}')">Smazat</button>
         `;
         document.getElementById('user-list').appendChild(div);
-        if(isDominik && deletable) document.getElementById(`del-u-${name}`).style.display = 'block';
+        if(isDominikAdmin && deletable) document.getElementById(`del-u-${name}`).style.display = 'block';
     }
 
     window.deleteUser = (name) => {
-        if(confirm(`Smazat uživatele ${name} a jeho zprávy?`)) {
+        if(confirm(`Smazat účet ${name}?`)) {
             remove(ref(db, 'users/' + name));
             remove(ref(db, 'messages/' + name));
         }
     };
 
-    // 4. Chat
+    // 4. Logika Chatu
     window.openChat = (name, pass) => {
         currentTarget = name;
         targetPass = pass;
@@ -151,11 +146,11 @@
         
         const loginBtn = document.getElementById('acc-login-btn');
         loginBtn.onclick = () => {
-            const p = prompt("Heslo k účtu:");
-            if(p === targetPass || (isDominik && name === "Dominik")) {
+            const p = prompt("Zadejte heslo k účtu:");
+            if(p === targetPass || (isDominikAdmin && name === "Dominik")) {
                 document.getElementById('message-list').classList.remove('hidden');
                 loadMsgs(name);
-            } else { alert("Přístup zamítnut."); }
+            } else { alert("Nepovolený přístup."); }
         };
     };
 
@@ -166,22 +161,31 @@
             const m = data.val();
             const d = document.createElement('div');
             d.className = 'message';
-            d.innerHTML = `<span>${m.text}</span> <span class="del-msg" onclick="deleteMsg('${name}','${data.key}')">✖</span>`;
+            // Tady je ta změna: vypisujeme "Kdo" napsal/a "Co"
+            d.innerHTML = `
+                <span><span class="sender-name">${m.sender}</span> napsal/a: ${m.text}</span>
+                <span class="del-msg" onclick="deleteMsg('${name}','${data.key}')">✖</span>
+            `;
             box.appendChild(d);
             box.scrollTop = box.scrollHeight;
         });
     }
 
     window.deleteMsg = (name, key) => {
-        if(confirm("Smazat zprávu?")) remove(ref(db, `messages/${name}/${key}`));
+        if(confirm("Smazat?")) remove(ref(db, `messages/${name}/${key}`));
     };
 
     document.getElementById('msg-form').onsubmit = (e) => {
         e.preventDefault();
         const inp = document.getElementById('msg-input');
-        push(ref(db, 'messages/' + currentTarget), { text: inp.value });
-        inp.value = "";
-        alert("Odesláno anonymně.");
+        if(inp.value.trim()){
+            push(ref(db, 'messages/' + currentTarget), {
+                sender: userNick, // Ukládáme přezdívku zadanou na začátku
+                text: inp.value
+            });
+            inp.value = "";
+            alert("Zpráva odeslána.");
+        }
     };
 
     // 5. Registrace
